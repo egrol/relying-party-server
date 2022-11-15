@@ -73,7 +73,7 @@ USER vapor:vapor
 EXPOSE 8080
 
 # Copy the bootstrap to start Vapor
-#COPY ./.env .env
+COPY ./.env .env
 COPY ./bootstrap.sh bootstrap.sh
 
 # Start the Vapor service when the image is run, default to listening on 8080 in production environment
