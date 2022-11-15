@@ -1,0 +1,7 @@
+{
+    "webcredentials":{
+        "apps":[
+            "<TEAM>.<BUNDLE_ID>"
+        ]
+    }
+}
