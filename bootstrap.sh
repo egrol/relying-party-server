@@ -1,3 +1,3 @@
 #!/bin/sh
 
-./RelyingPartyServer serve --env production --hostname 0.0.0.0 --port 8080
+/app/RelyingPartyServer serve --env production --hostname 0.0.0.0 --port 8080
