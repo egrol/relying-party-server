@@ -90,8 +90,6 @@ struct DefaultRoute: RouteCollection {
         }
     }
     
-    // MARK: User Sign-up and Validation
-    
     /// The user sign-up request.
     /// - Parameters:
     ///   - req: Represents an HTTP request.
