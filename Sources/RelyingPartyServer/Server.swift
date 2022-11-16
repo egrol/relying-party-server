@@ -4,6 +4,7 @@
 
 import Vapor
 
+/// Main entry point into the Vapor application.
 @main
 struct RelyingPartyServer {
     public static func main() async throws {
