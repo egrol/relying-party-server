@@ -19,7 +19,7 @@ struct Token: Content {
     /// Default is `3600`.
     let expiry: Int
     
-    /// An artifact that proves that the user has been authenticated
+    /// An artifact that proves that the user has been authenticated.
     ///
     /// Default is `nil`.
     let idToken: String?

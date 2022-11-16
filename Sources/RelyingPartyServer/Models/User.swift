@@ -23,7 +23,7 @@ struct UserSignUp: Content, Validatable {
     /// The users' first and last name.
     let name: String
     
-    /// The user's email address
+    /// The user's email address.
     let email: String
 
     static func validations(_ validations: inout Validations) {
@@ -34,13 +34,13 @@ struct UserSignUp: Content, Validatable {
 
 /// A structure that describes a one-time password challenge.
 struct OTPChallenge: Content {
-    /// The unique identifier of the verification
+    /// The unique identifier of the verification.
     let transactionId: String
     
     /// A value to be associated with the verification. It will be prefixed to the one-time password in the email to be sent.
     let correlation: String
     
-    /// The time when the verification expires
+    /// The time when the verification expires.
     let expiry: Date
 }
 
@@ -49,7 +49,7 @@ struct OTPVerification: Content, Validatable {
     /// The unique identifier of the verification
     let transactionId: String
     
-    /// The one-time password value
+    /// The one-time password value.
     let otp: String
 
     static func validations(_ validations: inout Validations) {
