@@ -7,13 +7,14 @@ import AsyncHTTPClient
 
 /// The `UserService` for issuing and validating one-time passwords and creating a new user.
 class UserService {
-    private let userUrl: URL
+    /// The base ``URL`` for the host.
+    let baseURL: URL
     
     /// Initialize the user service.
     /// - Parameters:
-    ///   - userUrl: The ``URL`` of the users endpoint.
-    init(userUrl: URL) {
-        self.userUrl = userUrl
+    ///   - baseURL: The base ``URL`` for the host.
+    init(baseURL: URL) {
+        self.baseURL = baseURL.appendingPathComponent("/v2.0")
     }
     
     /// Generate an one-time password to be emailed.
@@ -21,7 +22,7 @@ class UserService {
     ///   - token: The ``Token`` for authorizing requests to back-end services.
     ///   - email: The user's email address
     func generateOTP(token: Token, email: String) async throws -> (transactionId: String, correlation: String, expiry: Date) {
-        var request = HTTPClientRequest(url: self.userUrl.absoluteString + "/factors/emailotp/transient/verifications")
+        var request = HTTPClientRequest(url: self.baseURL.absoluteString + "/factors/emailotp/transient/verifications")
         request.headers.add(name: "content-type", value: "application/json")
         request.headers.add(name: "accept", value: "application/json")
         request.headers.bearerAuthorization = BearerAuthorization(token: token.accessToken)
@@ -60,7 +61,7 @@ class UserService {
     ///   - oneTimePassword: The one-time password value
     ///   - user: The use's sign-up details.
     func verifyUser(token: Token, transactionId: String, oneTimePassword: String, user: UserSignUp) async throws -> String {
-        var request = HTTPClientRequest(url: self.userUrl.absoluteString + "/factors/emailotp/transient/verifications/\(transactionId)")
+        var request = HTTPClientRequest(url: self.baseURL.absoluteString + "/factors/emailotp/transient/verifications/\(transactionId)")
         request.headers.add(name: "content-type", value: "application/json")
         request.headers.add(name: "accept", value: "application/json")
         request.headers.bearerAuthorization = BearerAuthorization(token: token.accessToken)
@@ -92,7 +93,7 @@ class UserService {
     ///   - email: The user's email address.
     ///   - name: The users' first and last name.
     private func createUser(token: Token, email: String, name: String) async throws -> String {
-        var request = HTTPClientRequest(url: self.userUrl.absoluteString + "/Users")
+        var request = HTTPClientRequest(url: self.baseURL.absoluteString + "/Users")
         request.headers.add(name: "content-type", value: "application/scim+json")
         request.headers.add(name: "accept", value: "application/scim+json")
         request.headers.bearerAuthorization = BearerAuthorization(token: token.accessToken)

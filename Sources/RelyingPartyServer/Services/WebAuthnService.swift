@@ -7,13 +7,14 @@ import AsyncHTTPClient
 
 /// The `WebAuthnService` for issuing challenges to an authenticator and performing attestation and assertion requests.
 class WebAuthnService {
-    private let fidoUrl: URL
+    /// The base ``URL`` for the host.
+    let baseURL: URL
     
-    /// Initialize the user service.
+    /// Initialize the Webauthn service.
     /// - Parameters:
-    ///   - fidoUrl: The ``URL`` of the FIDO2 relying party endpoint.
-    init(fidoUrl: URL) {
-        self.fidoUrl = fidoUrl
+    ///   - baseURL: The base ``URL`` for the host.
+    init(baseURL: URL) {
+        self.baseURL = baseURL.appendingPathComponent("/v2.0/factors/fido2/relyingparties/d658075d-edf9-472a-aca3-07afdbea7ae5")
     }
     
     /// Create a new authenticator with an attestation object containing a public key for server verification and storage.
@@ -24,7 +25,7 @@ class WebAuthnService {
     ///   - attestationObject: The base64Url-encoded attestationObject that is received from the WebAuthn client.
     ///   - credentialId: The credential identifier that is received from the WebAuthn client.
     func createCredentail(token: Token, nickname: String, clientDataJSON: String, attestationObject: String, credentialId: String) async throws {
-        var request = HTTPClientRequest(url: self.fidoUrl.absoluteString + "/attestation/result")
+        var request = HTTPClientRequest(url: self.baseURL.absoluteString + "/attestation/result")
         request.headers.add(name: "content-type", value: "application/json")
         request.headers.add(name: "accept", value: "application/json")
         request.headers.bearerAuthorization = BearerAuthorization(token: token.accessToken)
@@ -63,7 +64,7 @@ class WebAuthnService {
     ///   - credentialId: The credential identifier that is received from the WebAuthn client.
     ///   - signature: The base64Url-encoded bytes of the signature of the challenge data that was produced by the authenticator.
     func verifyCredentail(token: Token, clientDataJSON: String, authenticatorData: String, credentialId: String, signature: String) async throws -> Data {
-        var request = HTTPClientRequest(url: self.fidoUrl.absoluteString + "/assertion/result?returnJwt=true")
+        var request = HTTPClientRequest(url: self.baseURL.absoluteString + "/assertion/result?returnJwt=true")
         request.headers.add(name: "content-type", value: "application/json")
         request.headers.add(name: "accept", value: "application/json")
         request.headers.bearerAuthorization = BearerAuthorization(token: token.accessToken)
@@ -107,7 +108,7 @@ class WebAuthnService {
         }
         body += "}"
         
-        var request = HTTPClientRequest(url: self.fidoUrl.absoluteString + "/\(type.rawValue)/options")
+        var request = HTTPClientRequest(url: self.baseURL.absoluteString + "/\(type.rawValue)/options")
         request.headers.add(name: "content-type", value: "application/json")
         request.headers.add(name: "accept", value: "application/json")
         request.headers.bearerAuthorization = BearerAuthorization(token: token.accessToken)
