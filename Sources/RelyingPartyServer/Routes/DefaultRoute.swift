@@ -9,60 +9,57 @@ import Vapor
 struct DefaultRoute: RouteCollection {
     private let webAuthnService: WebAuthnService
     private let userService: UserService
-    private let tokenService: TokenService
+    private let authTokenService: TokenService
+    private let apiTokenService: TokenService
+    
     private let app: Application
     
-    private let authClientId: String
-    private let authClientSecret: String
-    private let serviceClientId: String
-    private let serviceClientSecret: String
-    
-    
-    /// Initializes the membership controller.
+    /// Initializes the default routes for user interactions.
     /// - Parameters:
     ///   - webapp: Core type representing a Vapor application.
     init(_ webapp: Application) throws {
-        // Load the FIDO related environment variables.
-        guard let fido = Environment.get("FIDO2_SERVICE_URL"), let fidoUrl = URL(string: fido), let serviceClientId = Environment.get("FIDO2_CLIENT_ID"), let serviceClientSecret = Environment.get("FIDO2_CLIENT_SECRET"), let token = Environment.get("TOKEN_SERVICE_URL"), let tokenUrl = URL(string: token) else {
+        // Load the base URL for interacting with the services.
+        guard let base = Environment.get("BASE_URL"), let baseURL = URL(string: base) else {
+            preconditionFailure("The base URL environment variables not set or invalid.")
+        }
+        
+        guard let apiClientId = Environment.get("API_CLIENT_ID"), let apiClientSecret = Environment.get("API_CLIENT_SECRET") else {
             preconditionFailure("FIDO2 related environment variables not set or invalid.")
         }
         
-        guard let user = Environment.get("USER_SERVICE_URL"), let userUrl = URL(string: user) else {
-            preconditionFailure("User service environment variables not set or invalid.")
-        }
-        
-        guard let tokenClientId = Environment.get("TOKEN_CLIENT_ID"), let tokenClientSecret = Environment.get("TOKEN_CLIENT_SECRET") else {
+        guard let authClientId = Environment.get("AUTH_CLIENT_ID"), let authClientSecret = Environment.get("AUTH_CLIENT_SECRET") else {
             preconditionFailure("Token related environment variables not set or invalid.")
         }
         
         self.app = webapp
         
-        // Set the fido service token related variables
-        self.serviceClientId = serviceClientId
-        self.serviceClientSecret = serviceClientSecret
-        
-        // Set the user authentication token related variables.
-        self.authClientId = tokenClientId
-        self.authClientSecret = tokenClientSecret
-        
-        
-        // Create the instance of the Token service.
-        self.tokenService = TokenService(tokenUrl: tokenUrl)
-        
+        // Create the instances of the Token service for authorization of users and api clients.
+        self.authTokenService = TokenService(baseURL: baseURL, clientId: authClientId, clientSecret: authClientSecret)
+        self.apiTokenService = TokenService(baseURL: baseURL, clientId: apiClientId, clientSecret: apiClientSecret)
+                                             
         // Create the instance of the User service.
-        self.userService = UserService(userUrl: userUrl)
+        self.userService = UserService(baseURL: baseURL)
         
         // Create the instance of the WebAuthnService service.
-        self.webAuthnService = WebAuthnService(fidoUrl: fidoUrl)
+        self.webAuthnService = WebAuthnService(baseURL: baseURL)
     }
     
     func boot(routes: RoutesBuilder) throws {
         let route = routes.grouped("v1")
+        // Used for existing accounts with a password resulting in an ROPC to token endpoint.
         route.post("authenticate", use: authenticate)
+        
+        // Used to initiate a user sign-up, which also requires the OTP validation.
         route.post("signup", use: signup)
         route.post("validate", use: validate)
+        
+        // Used to generate a FIDO challenge for attestation and assertion.
         route.post("challenge", use: challenge)
+        
+        // Used to register an authenticatpr with a FIDO attestation result.
         route.post("register", use: register)
+        
+        // Used to validate an authenticator with a FIDO assertion result.
         route.post("signin", use: signin)
     }
     
@@ -85,7 +82,7 @@ struct DefaultRoute: RouteCollection {
         let authenticate = try req.content.decode(UserAuthentication.self)
         
         do {
-            return try await tokenService.authorize(clientId: self.authClientId, clientSecret: self.authClientSecret, username: authenticate.username, password: authenticate.password)
+            return try await authTokenService.password(username: authenticate.username, password: authenticate.password)
         }
         catch let error {
             req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
@@ -157,10 +154,10 @@ struct DefaultRoute: RouteCollection {
             req.logger.info("Removing \(validation.transactionId) OTP from cache.")
             try? await req.cache.delete(validation.transactionId)
             
-            // Generate a JWT representing the userId
-            let assertion = self.tokenService.generateJWT(signingSecret: self.authClientSecret, subject: result, issuer: app.addressDescription)
+            // Generate a JWT representing the userId with the signing secret being the client secret.
+            let assertion = self.authTokenService.generateJWT(signingSecret: self.authTokenService.clientSecret, subject: result, issuer: app.addressDescription)
             
-            return try await self.tokenService.authorize(clientId: self.authClientId, clientSecret: self.authClientSecret, jwt: assertion)
+            return try await self.authTokenService.jwtBearer(assertion: assertion)
         }
         catch let error {
             req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
@@ -177,37 +174,37 @@ struct DefaultRoute: RouteCollection {
     /// An example JSON request body for obtaining a challenge for registration:
     /// ```
     /// {
-    ///    "displayName": "John's iPhone"
+    ///    "displayName": "John's iPhone",
+    ///    "type": "attestation"
     /// }
     /// ```
     ///
     /// The `displayName` is ignored when a assertion challenge is requested.
     ///
-    /// Requesting a challenge for verification requires the request to have an authorization request header.
+    /// Requesting a challenge to complete a subsequent registration operation (attestation) requires the request to have an authorization request header.
     func challenge(_ req: Request) async throws -> FIDO2Challenge {
-        // Default displayName to nil for assertion requests.
-        var displayName: String? = nil
+        // Validate the request data.
+        let challenge = try req.content.decode(ChallengeRequest.self)
         
-        // Default to an unauthenticated assertion challenge.
-        var challengeType: ChallengeType = .assertion
+        // Default displayName to nil for assertion requests.
+        let displayName: String? = challenge.type == .assertion ? nil : challenge.displayName
         
         // Default to the service token.
         var token = try await token
         
-        // If bearer exists in the header, create the Token and set the challenge type.
-        if let bearer = req.headers.bearerAuthorization {
-            token = Token(accessToken: bearer.token)
-            challengeType = .attestation
-            
-            // Validate the request data.
-            let challenge = try req.content.decode(ChallengeRequest.self)
-            displayName = challenge.displayName
+        // If an attestation is request and the bearer doesn't exist in the header, throw error.
+        if challenge.type == .attestation, req.headers.bearerAuthorization == nil {
+            throw Abort(.unauthorized)
         }
         
-        req.logger.info("Request for \(challengeType.rawValue) challenge.")
+        if let bearer = req.headers.bearerAuthorization {
+            token = Token(accessToken: bearer.token)
+        }
+        
+        req.logger.info("Request for \(challenge.type) challenge.")
         
         do {
-            let result = try await webAuthnService.generateChallenge(token: token, displayName: displayName, type: challengeType)
+            let result = try await webAuthnService.generateChallenge(token: token, displayName: displayName, type: challenge.type)
             
             return FIDO2Challenge(challenge: result)
         }
@@ -272,7 +269,9 @@ struct DefaultRoute: RouteCollection {
         
         do {
             let result = try await webAuthnService.verifyCredentail(token: try await token, clientDataJSON: verification.clientDataJSON, authenticatorData: verification.authenticatorData, credentialId: verification.credentialId, signature: verification.signature)
-            print(result)
+            
+            
+            print(String(decoding: result, as: UTF8.self))
             
             // Parse out the assertion
             guard let json = try JSONSerialization.jsonObject(with: result, options: []) as? [String: Any], let assertion = json["assertion"] as? String else {
@@ -280,7 +279,7 @@ struct DefaultRoute: RouteCollection {
             }
             
             // Return an access token based on the JWT assertion.
-            return try await tokenService.authorize(clientId: self.authClientId, clientSecret: self.authClientSecret, jwt: assertion)
+            return try await authTokenService.jwtBearer(assertion: assertion)
         }
         catch let error {
             req.logger.error(Logger.Message(stringLiteral: error.localizedDescription))
@@ -300,7 +299,7 @@ struct DefaultRoute: RouteCollection {
             }
             
             // Obtain a new token.
-            let value = try await self.tokenService.authorize(clientId: self.serviceClientId, clientSecret: serviceClientSecret)
+            let value = try await self.apiTokenService.clientCredentials()
             
             // Add to cache but will expiry the token (in cache) 60 before it's actual expiry.
             try await app.cache.set("token", to: value, expiresIn: CacheExpirationTime.seconds(value.expiry - 60))
