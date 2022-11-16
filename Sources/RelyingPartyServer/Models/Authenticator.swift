@@ -10,6 +10,9 @@ import Vapor
 struct ChallengeRequest: Content {
     /// The display name used by the authenticator for UI representation.
     let displayName: String?
+    
+    /// The type of FIDO2 challenge.
+    let type: ChallengeType
 }
 
 /// A structure representing a FIDO2 challenge.
