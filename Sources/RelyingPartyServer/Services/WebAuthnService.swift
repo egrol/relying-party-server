@@ -13,8 +13,9 @@ class WebAuthnService {
     /// Initialize the Webauthn service.
     /// - Parameters:
     ///   - baseURL: The base ``URL`` for the host.
-    init(baseURL: URL) {
-        self.baseURL = baseURL.appendingPathComponent("/v2.0/factors/fido2/relyingparties/d658075d-edf9-472a-aca3-07afdbea7ae5")
+    ///   - relyingPartyId: The UUID representing the unique relying party.
+    init(baseURL: URL, relyingPartyId: String) {
+        self.baseURL = baseURL.appendingPathComponent("/v2.0/factors/fido2/relyingparties/\(relyingPartyId)")
     }
     
     /// Create a new authenticator with an attestation object containing a public key for server verification and storage.

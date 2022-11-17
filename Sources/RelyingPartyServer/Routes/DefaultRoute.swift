@@ -23,6 +23,10 @@ struct DefaultRoute: RouteCollection {
             preconditionFailure("The base URL environment variables not set or invalid.")
         }
         
+        guard let relyingPartyId = Environment.get("FIDO2_RELYING_PARTY_ID") else {
+            preconditionFailure("The relying party identifier is not set or invalid.")
+        }
+        
         guard let apiClientId = Environment.get("API_CLIENT_ID"), let apiClientSecret = Environment.get("API_CLIENT_SECRET") else {
             preconditionFailure("FIDO2 related environment variables not set or invalid.")
         }
@@ -41,7 +45,7 @@ struct DefaultRoute: RouteCollection {
         self.userService = UserService(baseURL: baseURL)
         
         // Create the instance of the WebAuthnService service.
-        self.webAuthnService = WebAuthnService(baseURL: baseURL)
+        self.webAuthnService = WebAuthnService(baseURL: baseURL, relyingPartyId: relyingPartyId)
     }
     
     func boot(routes: RoutesBuilder) throws {
